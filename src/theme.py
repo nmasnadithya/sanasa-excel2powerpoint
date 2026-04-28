@@ -25,8 +25,8 @@ TABLE_TITLE_SIZE = Pt(48)                   # slide 2 title: 609600 EMU
 CHART_TITLE_SIZE = Pt(40)                   # slide 3 title: 508000 EMU
 TABLE_CELL_SIZE = Pt(34)                    # slide 2 cells: 431800 EMU
 BIG_NUMBER_SIZE = Pt(80)
-CHART_LEGEND_SIZE = Pt(32)                  # readable from a hall; source had 36pt
-CHART_DATA_LABEL_SIZE = Pt(28)              # bold percentage labels
+CHART_LEGEND_SIZE = Pt(36)                  # readable from a hall; source had 36pt
+CHART_DATA_LABEL_SIZE = Pt(36)              # bold percentage labels
 
 # Geometry (slides 2 and 3 — exact positions from the source deck) ----------
 TABLE_TITLE_LEFT = Emu(457200)
