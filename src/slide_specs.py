@@ -96,17 +96,20 @@ def build_specs(reader: ExcelReader, target_date: date) -> list[SlideSpec]:
         SlideSpec(
             layout="table",
             title="ආදායම",
-            data=DataQuery(SUMMARY_SHEET, (4, 7)),
+            # rows 4–7 = categories, row 8 = මුළු ආදායම (total)
+            data=DataQuery(SUMMARY_SHEET, (4, 8)),
         ),
         SlideSpec(
             layout="chart",
             title="ආදායම් බෙදීම",
+            # chart shows only the categories — total isn't a slice
             data=DataQuery(SUMMARY_SHEET, (4, 7)),
         ),
         SlideSpec(
             layout="table",
             title="වියදම",
-            data=DataQuery(SUMMARY_SHEET, (11, 14)),
+            # rows 11–14 = categories, row 15 = මුළු වියදම (total)
+            data=DataQuery(SUMMARY_SHEET, (11, 15)),
         ),
         SlideSpec(
             layout="chart",
