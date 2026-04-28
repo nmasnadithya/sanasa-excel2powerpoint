@@ -1,14 +1,25 @@
-"""Native PowerPoint pie chart with theme-coloured slices and readable legend."""
+"""Native PowerPoint pie chart with theme-coloured slices and readable legend.
+
+We patch the chart XML directly because python-pptx's font wrappers write
+`<a:defRPr>` only — and PowerPoint's chart engine often overrides defaults
+from the embedded chart style. Writing the values directly into the
+`<c:txPr>` elements (and forcing `<c:legendPos val="r"/>`) ensures the
+sizes, weights, and colours actually render.
+"""
 from __future__ import annotations
 
 from typing import Sequence
 
+from lxml import etree
 from pptx.chart.data import CategoryChartData
 from pptx.dml.color import RGBColor
 from pptx.enum.chart import XL_CHART_TYPE, XL_LEGEND_POSITION, XL_LABEL_POSITION
 
 from src import theme
-from src.sinhala_font import apply_sinhala_to_font
+
+
+_C_NS = "http://schemas.openxmlformats.org/drawingml/2006/chart"
+_A_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
 
 
 def build_pie_chart(
@@ -29,18 +40,11 @@ def build_pie_chart(
     chart = graphic.chart
 
     chart.has_title = False
-
-    # Legend — readable size + black so it shows on the light theme.
     chart.has_legend = True
     chart.legend.position = XL_LEGEND_POSITION.RIGHT
     chart.legend.include_in_layout = False
-    legend_font = chart.legend.font
-    legend_font.size = theme.CHART_LEGEND_SIZE
-    legend_font.bold = False
-    legend_font.color.rgb = theme.BLACK
-    apply_sinhala_to_font(legend_font)
 
-    # Per-slice fills + bold percentage data labels.
+    # Per-slice fills.
     plot = chart.plots[0]
     plot.has_data_labels = True
     dl = plot.data_labels
@@ -48,9 +52,6 @@ def build_pie_chart(
     dl.show_category_name = False
     dl.show_value = False
     dl.position = XL_LABEL_POSITION.OUTSIDE_END
-    dl.font.size = theme.CHART_DATA_LABEL_SIZE
-    dl.font.bold = True
-    dl.font.color.rgb = theme.BLACK
     dl.number_format = "0.0%"
     dl.number_format_is_linked = False
 
@@ -59,3 +60,97 @@ def build_pie_chart(
         fill = point.format.fill
         fill.solid()
         fill.fore_color.rgb = slice_colors[idx % len(slice_colors)]
+
+    # --- Direct XML patches (PowerPoint ignores defRPr from chart style) ---
+    chart_space = chart._chartSpace
+
+    # 1. Force <c:legendPos val="r"/> — python-pptx writes it without a val
+    legend_pos = chart_space.find(
+        f"{{{_C_NS}}}chart/{{{_C_NS}}}legend/{{{_C_NS}}}legendPos"
+    )
+    if legend_pos is not None:
+        legend_pos.set("val", "r")
+
+    # 2. Force the chart style to a neutral one so the chart's theme XML
+    #    doesn't override our text settings. Insert <c:style val="2"/>.
+    _ensure_chart_style(chart_space, val=2)
+
+    # 3. Rewrite legend txPr with explicit rPr (not defRPr) — runs win over
+    #    inheritance. Apply size/bold/color/font + Sinhala cs.
+    legend = chart_space.find(f"{{{_C_NS}}}chart/{{{_C_NS}}}legend")
+    if legend is not None:
+        _force_text_style(
+            legend,
+            size_pt=theme.CHART_LEGEND_SIZE.pt,
+            bold=True,
+            color_hex=_hex(theme.BLACK),
+            sinhala=True,
+        )
+
+    # 4. Same for data label txPr — bold percentages, larger size.
+    pie = chart_space.find(
+        f"{{{_C_NS}}}chart/{{{_C_NS}}}plotArea/{{{_C_NS}}}pieChart"
+    )
+    if pie is not None:
+        for d_lbls in pie.iter(f"{{{_C_NS}}}dLbls"):
+            _force_text_style(
+                d_lbls,
+                size_pt=theme.CHART_DATA_LABEL_SIZE.pt,
+                bold=True,
+                color_hex=_hex(theme.BLACK),
+                sinhala=False,
+            )
+
+
+# --- XML helpers -----------------------------------------------------------
+
+def _ensure_chart_style(chart_space, val: int) -> None:
+    chart = chart_space.find(f"{{{_C_NS}}}chart")
+    if chart is None:
+        return
+    style = chart_space.find(f"{{{_C_NS}}}style")
+    if style is None:
+        style = etree.SubElement(chart_space, f"{{{_C_NS}}}style")
+        # <c:style> must come AFTER <c:chart> per ECMA-376; ensure ordering
+        chart_space.remove(style)
+        chart.addnext(style)
+    style.set("val", str(val))
+
+
+def _force_text_style(host_element, size_pt: float, bold: bool,
+                      color_hex: str, sinhala: bool) -> None:
+    """Replace `<c:txPr>` under `host_element` with one that uses an explicit
+    rPr (forces PowerPoint to honour our settings)."""
+    txPr_qn = f"{{{_C_NS}}}txPr"
+    existing = host_element.find(txPr_qn)
+    if existing is not None:
+        host_element.remove(existing)
+
+    txPr = etree.SubElement(host_element, txPr_qn)
+    etree.SubElement(txPr, f"{{{_A_NS}}}bodyPr")
+    etree.SubElement(txPr, f"{{{_A_NS}}}lstStyle")
+    p = etree.SubElement(txPr, f"{{{_A_NS}}}p")
+    pPr = etree.SubElement(p, f"{{{_A_NS}}}pPr")
+
+    sz_hundredths = int(size_pt * 100)
+    defRPr = etree.SubElement(pPr, f"{{{_A_NS}}}defRPr",
+                              sz=str(sz_hundredths),
+                              b="1" if bold else "0")
+    solid = etree.SubElement(defRPr, f"{{{_A_NS}}}solidFill")
+    etree.SubElement(solid, f"{{{_A_NS}}}srgbClr", val=color_hex)
+    etree.SubElement(defRPr, f"{{{_A_NS}}}latin",
+                     typeface=theme.SINHALA_FONT if sinhala else theme.LATIN_FONT)
+    etree.SubElement(defRPr, f"{{{_A_NS}}}cs",
+                     typeface=theme.SINHALA_FONT)
+
+    # Add an empty run with explicit rPr — matches what PowerPoint expects.
+    endRPr = etree.SubElement(p, f"{{{_A_NS}}}endParaRPr",
+                              lang="en-US",
+                              sz=str(sz_hundredths),
+                              b="1" if bold else "0")
+    solid2 = etree.SubElement(endRPr, f"{{{_A_NS}}}solidFill")
+    etree.SubElement(solid2, f"{{{_A_NS}}}srgbClr", val=color_hex)
+
+
+def _hex(color: RGBColor) -> str:
+    return str(color)

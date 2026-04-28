@@ -1,10 +1,11 @@
-"""v1.1 builder — opens the source deck, uses its layouts/master, builds new
+"""v1 builder — opens the source deck, uses its layouts/master, builds new
 slides with positions and fonts calibrated to slides 1-3 of the source."""
 from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
 
+from lxml import etree
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
@@ -23,6 +24,9 @@ CONTINUATION_SUFFIX = " (අඛණ්ඩව)"
 DEFAULT_SOURCE = (
     Path(__file__).resolve().parents[2] / "labalaba ginuma.pptx"
 )
+
+_P_NS = "http://schemas.openxmlformats.org/presentationml/2006/main"
+_A_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
 
 
 class TemplateBuilder:
@@ -44,7 +48,6 @@ class TemplateBuilder:
         cover_layout = prs.slides[0].slide_layout
         blank_layout = self._find_layout(prs, "Blank")
 
-        # Snapshot original slide IDs so we can remove them at the end.
         original_sld_ids = list(prs.slides._sldIdLst)
 
         for spec in specs:
@@ -68,6 +71,7 @@ class TemplateBuilder:
 
     def _render_cover(self, prs, layout, spec: SlideSpec) -> None:
         slide = prs.slides.add_slide(layout)
+        # Cover keeps its layout-defined background image — don't paint over it.
 
         title_ph, subtitle_ph = self._cover_placeholders(slide)
 
@@ -79,8 +83,8 @@ class TemplateBuilder:
             self._set_textframe_text(
                 title_ph.text_frame,
                 spec.title,
-                size=None,                      # let layout/auto-size decide
-                color=None,                     # inherit from layout
+                size=None,                # let layout/auto-size decide
+                color=None,
                 bold=True,
                 align=None,
             )
@@ -95,11 +99,10 @@ class TemplateBuilder:
                 spec.subtitle,
                 size=theme.COVER_SUBTITLE_SIZE,
                 color=theme.RED_BRIGHT,
-                bold=False,
+                bold=True,                # user wants bold on the date subtitle
                 align=None,
             )
 
-        # Accent rectangle decoration
         decor = slide.shapes.add_shape(
             MSO_SHAPE.RECTANGLE,
             theme.COVER_DECOR_LEFT,
@@ -118,12 +121,10 @@ class TemplateBuilder:
         if not rows:
             return
 
-        chunks = [
-            rows[i : i + MAX_ROWS_PER_TABLE_SLIDE]
-            for i in range(0, len(rows), MAX_ROWS_PER_TABLE_SLIDE)
-        ]
+        chunks = _distribute_evenly(rows, MAX_ROWS_PER_TABLE_SLIDE)
         for page_idx, chunk in enumerate(chunks):
             slide = prs.slides.add_slide(layout)
+            self._set_white_background(slide)
             title = spec.title if page_idx == 0 else spec.title + CONTINUATION_SUFFIX
             self._draw_table_title(slide, title)
             self._draw_table(slide, chunk)
@@ -138,14 +139,17 @@ class TemplateBuilder:
             return
 
         slide = prs.slides.add_slide(layout)
+        self._set_white_background(slide)
         self._draw_table_title(slide, spec.title)
 
+        # Position the number in the lower-middle band of the slide so it
+        # reads as the focal element, not crammed against the title.
         slide_w = prs.slide_width
         slide_h = prs.slide_height
         box_h = Emu(2_500_000)
         num_box = slide.shapes.add_textbox(
             Emu(0),
-            Emu(slide_h // 2 - box_h // 2),
+            Emu(int(slide_h * 0.45) - box_h // 2),
             slide_w,
             box_h,
         )
@@ -167,6 +171,7 @@ class TemplateBuilder:
             return
 
         slide = prs.slides.add_slide(layout)
+        self._set_white_background(slide)
         self._draw_chart_title(slide, spec.title)
         build_pie_chart(
             slide,
@@ -226,11 +231,9 @@ class TemplateBuilder:
         )
         table = shape.table
 
-        # Disable the default first-row header styling AND the first-column
-        # styling (they make the leftmost label cell look like a header).
         table.first_row = False
         table.first_col = False
-        table.horz_banding = False  # we apply explicit fills for full control
+        table.horz_banding = False
         table.vert_banding = False
 
         table.columns[0].width = theme.TABLE_COL0_WIDTH
@@ -241,25 +244,27 @@ class TemplateBuilder:
             bg = theme.TABLE_ROW_A if i % 2 == 0 else theme.TABLE_ROW_B
             self._populate_cell(
                 table.cell(i, 0), row.label, bg=bg,
-                align=PP_ALIGN.LEFT, bold=False, apply_sinhala=True,
+                align=PP_ALIGN.LEFT, bold=False,
+                apply_sinhala=True, word_wrap=True,
             )
             self._populate_cell(
                 table.cell(i, 1), f"{row.value:,.2f}", bg=bg,
-                align=PP_ALIGN.RIGHT, bold=True, apply_sinhala=False,
+                align=PP_ALIGN.RIGHT, bold=True,
+                apply_sinhala=False, word_wrap=False,
             )
 
     def _populate_cell(self, cell, text: str, bg, align, bold: bool,
-                       apply_sinhala: bool) -> None:
+                       apply_sinhala: bool, word_wrap: bool) -> None:
         cell.fill.solid()
         cell.fill.fore_color.rgb = bg
         cell.vertical_anchor = MSO_ANCHOR.MIDDLE
-        cell.margin_left = Inches(0.15)
-        cell.margin_right = Inches(0.15)
+        cell.margin_left = Inches(0.12)
+        cell.margin_right = Inches(0.12)
         cell.margin_top = Inches(0.05)
         cell.margin_bottom = Inches(0.05)
         tf = cell.text_frame
         tf.clear()
-        tf.word_wrap = True
+        tf.word_wrap = word_wrap
         para = tf.paragraphs[0]
         para.alignment = align
         run = para.add_run()
@@ -299,13 +304,33 @@ class TemplateBuilder:
         return reader.rows(query.sheet, query.rows, col, query.label_col)
 
     @staticmethod
+    def _set_white_background(slide) -> None:
+        """Override the master's dark navy background with explicit white.
+
+        The source deck's master is `#1B2A4A`; only slides 1-3 override it.
+        Without this, every new content slide inherits the dark navy.
+        """
+        cSld = slide.element.find(f"{{{_P_NS}}}cSld")
+        existing_bg = cSld.find(f"{{{_P_NS}}}bg")
+        if existing_bg is not None:
+            cSld.remove(existing_bg)
+        bg = etree.SubElement(cSld, f"{{{_P_NS}}}bg")
+        bg_pr = etree.SubElement(bg, f"{{{_P_NS}}}bgPr")
+        solid = etree.SubElement(bg_pr, f"{{{_A_NS}}}solidFill")
+        etree.SubElement(solid, f"{{{_A_NS}}}srgbClr", val="FFFFFF")
+        etree.SubElement(bg_pr, f"{{{_A_NS}}}effectLst")
+        # `bg` must come BEFORE `spTree` per ECMA-376; lxml SubElement
+        # appends to end. Re-order if needed.
+        sp_tree = cSld.find(f"{{{_P_NS}}}spTree")
+        if sp_tree is not None and bg.getnext() is not sp_tree:
+            cSld.remove(bg)
+            cSld.insert(list(cSld).index(sp_tree), bg)
+
+    @staticmethod
     def _cover_placeholders(slide):
-        """Locate the title and subtitle placeholders on a Title-Slide layout."""
         title_ph = None
         subtitle_ph = None
         for ph in slide.placeholders:
-            ph_type = ph.placeholder_format.type
-            # idx 0 is title; idx 1 is subtitle on the standard Title layout
             if ph.placeholder_format.idx == 0:
                 title_ph = ph
             elif ph.placeholder_format.idx == 1:
@@ -328,3 +353,26 @@ class TemplateBuilder:
             )
             prs.part.drop_rel(rId)
             sldIdLst.remove(sid)
+
+
+def _distribute_evenly(items, max_per_slide: int) -> list[list]:
+    """Split into pages with no slide exceeding `max_per_slide`, distributing
+    remainders so page sizes differ by at most 1.
+
+    Per the user's spec: when items > max_per_slide,
+    n_slides = (items // max_per_slide) + 1, then balance.
+    For 22 items at max 9: 3 slides of 8, 7, 7.
+    """
+    n = len(items)
+    if n <= max_per_slide:
+        return [list(items)]
+    n_slides = (n // max_per_slide) + 1
+    base = n // n_slides
+    extra = n % n_slides
+    chunks: list[list] = []
+    idx = 0
+    for i in range(n_slides):
+        size = base + (1 if i < extra else 0)
+        chunks.append(list(items[idx:idx + size]))
+        idx += size
+    return chunks

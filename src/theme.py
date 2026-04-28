@@ -25,8 +25,8 @@ TABLE_TITLE_SIZE = Pt(48)                   # slide 2 title: 609600 EMU
 CHART_TITLE_SIZE = Pt(40)                   # slide 3 title: 508000 EMU
 TABLE_CELL_SIZE = Pt(34)                    # slide 2 cells: 431800 EMU
 BIG_NUMBER_SIZE = Pt(80)
-CHART_LEGEND_SIZE = Pt(24)                  # readable; source had 36pt white-on-white
-CHART_DATA_LABEL_SIZE = Pt(18)              # bold percentage labels
+CHART_LEGEND_SIZE = Pt(32)                  # readable from a hall; source had 36pt
+CHART_DATA_LABEL_SIZE = Pt(28)              # bold percentage labels
 
 # Geometry (slides 2 and 3 — exact positions from the source deck) ----------
 TABLE_TITLE_LEFT = Emu(457200)
@@ -37,8 +37,10 @@ TABLE_TITLE_HEIGHT = Emu(830997)
 TABLE_LEFT = Emu(457200)
 TABLE_TOP = Emu(1038134)
 TABLE_WIDTH = Emu(9716530)
-TABLE_COL0_WIDTH = Emu(7116417)             # label column ~73%
-TABLE_COL1_WIDTH = Emu(2600113)             # value column ~27%
+# Wider value column than the source so 12-character formatted numbers
+# (e.g. "1,234,426.00") render on a single line.
+TABLE_COL0_WIDTH = Emu(6216530)             # label column ~64%
+TABLE_COL1_WIDTH = Emu(3500000)             # value column ~36%
 TABLE_ROW_HEIGHT = Emu(564457)
 
 CHART_TITLE_LEFT = Emu(457200)
