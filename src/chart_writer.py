@@ -43,6 +43,13 @@ def build_pie_chart(
     chart.has_legend = True
     chart.legend.position = XL_LEGEND_POSITION.RIGHT
     chart.legend.include_in_layout = False
+    _set_legend_manual_layout(
+        chart,
+        x=theme.LEGEND_LAYOUT_X,
+        y=theme.LEGEND_LAYOUT_Y,
+        w=theme.LEGEND_LAYOUT_W,
+        h=theme.LEGEND_LAYOUT_H,
+    )
 
     # Per-slice fills.
     plot = chart.plots[0]
@@ -103,6 +110,37 @@ def build_pie_chart(
 
 
 # --- XML helpers -----------------------------------------------------------
+
+def _set_legend_manual_layout(chart, x: float, y: float, w: float, h: float) -> None:
+    """Force a wide legend container via `<c:manualLayout>` (fractions 0..1).
+
+    python-pptx's auto-positioned legend collapses to ~20% width — too narrow
+    for long Sinhala category labels at 36pt. Source slide 3 used 43% width,
+    so we set an explicit layout that mirrors that.
+    """
+    legend = chart._chartSpace.find(
+        f"{{{_C_NS}}}chart/{{{_C_NS}}}legend"
+    )
+    if legend is None:
+        return
+    existing = legend.find(f"{{{_C_NS}}}layout")
+    if existing is not None:
+        legend.remove(existing)
+    layout = etree.Element(f"{{{_C_NS}}}layout")
+    manual = etree.SubElement(layout, f"{{{_C_NS}}}manualLayout")
+    etree.SubElement(manual, f"{{{_C_NS}}}xMode", val="edge")
+    etree.SubElement(manual, f"{{{_C_NS}}}yMode", val="edge")
+    etree.SubElement(manual, f"{{{_C_NS}}}x", val=str(x))
+    etree.SubElement(manual, f"{{{_C_NS}}}y", val=str(y))
+    etree.SubElement(manual, f"{{{_C_NS}}}w", val=str(w))
+    etree.SubElement(manual, f"{{{_C_NS}}}h", val=str(h))
+    # `<c:layout>` must come BEFORE `<c:overlay>` per the schema
+    legend_pos = legend.find(f"{{{_C_NS}}}legendPos")
+    if legend_pos is not None:
+        legend_pos.addnext(layout)
+    else:
+        legend.insert(0, layout)
+
 
 def _ensure_chart_style(chart_space, val: int) -> None:
     chart = chart_space.find(f"{{{_C_NS}}}chart")

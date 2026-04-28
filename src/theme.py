@@ -53,6 +53,19 @@ CHART_TOP = Emu(914400)
 CHART_WIDTH = Emu(11277600)
 CHART_HEIGHT = Emu(5486400)
 
+# Big-number slide (slide 8 in source) — exact title/value positions ---------
+BIG_NUMBER_TITLE_LEFT = Emu(457200)
+BIG_NUMBER_TITLE_TOP = Emu(1778000)
+BIG_NUMBER_TITLE_WIDTH = Emu(11277600)
+BIG_NUMBER_TITLE_HEIGHT = Emu(923330)
+BIG_NUMBER_TITLE_SIZE = Pt(54)              # source: 685800 EMU
+
+BIG_NUMBER_VALUE_LEFT = Emu(457200)
+BIG_NUMBER_VALUE_TOP = Emu(3338780)
+BIG_NUMBER_VALUE_WIDTH = Emu(11277600)
+BIG_NUMBER_VALUE_HEIGHT = Emu(1323439)
+BIG_NUMBER_VALUE_COLOR = RGBColor(0x27, 0xAE, 0x60)   # source green
+
 # Cover slide placeholder overrides (slide 1 — the dark cover) --------------
 COVER_TITLE_LEFT = Emu(762000)
 COVER_TITLE_TOP = Emu(1651000)
@@ -70,14 +83,18 @@ COVER_DECOR_WIDTH = Emu(2540000)
 COVER_DECOR_HEIGHT = Emu(38100)
 COVER_DECOR_COLOR = RGBColor(0x4A, 0x90, 0xD9)
 
-# Pie palette ---------------------------------------------------------------
+# Pie palette — exact colors picked by the user for projector visibility in
+# a brightly-lit hall with 300+ attendees. Reused across all pie charts.
 PIE_PALETTE = [
-    RGBColor(0xC0, 0x00, 0x00),
-    RGBColor(0xE8, 0xB3, 0x0E),
-    RGBColor(0x4A, 0x90, 0xD9),
-    RGBColor(0x6A, 0xA8, 0x4F),
-    RGBColor(0x96, 0x4B, 0x00),
-    RGBColor(0x6F, 0x42, 0xC1),
-    RGBColor(0xD9, 0x53, 0x4F),
-    RGBColor(0x20, 0x71, 0x9E),
+    RGBColor(0x00, 0x5F, 0x73),    # deep teal
+    RGBColor(0xB8, 0x86, 0x0B),    # dark goldenrod
+    RGBColor(0x9B, 0x1B, 0x30),    # dark crimson
+    RGBColor(0x00, 0x68, 0x38),    # dark green
+    RGBColor(0xE6, 0x51, 0x00),    # deep orange
 ]
+
+# Chart legend layout (fractions of chart-area; matches source slide 3) ------
+LEGEND_LAYOUT_X = 0.50
+LEGEND_LAYOUT_Y = 0.05
+LEGEND_LAYOUT_W = 0.48
+LEGEND_LAYOUT_H = 0.90

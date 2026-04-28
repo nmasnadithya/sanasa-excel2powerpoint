@@ -140,24 +140,35 @@ class TemplateBuilder:
 
         slide = prs.slides.add_slide(layout)
         self._set_white_background(slide)
-        self._draw_table_title(slide, spec.title)
 
-        # Position the number in the lower-middle band of the slide so it
-        # reads as the focal element, not crammed against the title.
-        slide_w = prs.slide_width
-        slide_h = prs.slide_height
-        box_h = Emu(2_500_000)
+        # Title — at source slide-8's position (upper third, not top edge).
+        title_box = slide.shapes.add_textbox(
+            theme.BIG_NUMBER_TITLE_LEFT,
+            theme.BIG_NUMBER_TITLE_TOP,
+            theme.BIG_NUMBER_TITLE_WIDTH,
+            theme.BIG_NUMBER_TITLE_HEIGHT,
+        )
+        self._set_textframe_text(
+            title_box.text_frame,
+            spec.title,
+            size=theme.BIG_NUMBER_TITLE_SIZE,
+            color=theme.RED,
+            bold=False,
+            align=PP_ALIGN.CENTER,
+        )
+
+        # Value — at source slide-8's position (mid-slide), green for emphasis.
         num_box = slide.shapes.add_textbox(
-            Emu(0),
-            Emu(int(slide_h * 0.45) - box_h // 2),
-            slide_w,
-            box_h,
+            theme.BIG_NUMBER_VALUE_LEFT,
+            theme.BIG_NUMBER_VALUE_TOP,
+            theme.BIG_NUMBER_VALUE_WIDTH,
+            theme.BIG_NUMBER_VALUE_HEIGHT,
         )
         self._set_textframe_text(
             num_box.text_frame,
             f"{value:,.2f}",
             size=theme.BIG_NUMBER_SIZE,
-            color=theme.BLACK,
+            color=theme.BIG_NUMBER_VALUE_COLOR,
             bold=True,
             align=PP_ALIGN.CENTER,
             apply_sinhala=False,
