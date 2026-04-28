@@ -1,0 +1,8 @@
+name: sansa-excel2powerpoint
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - openpyxl>=3.1.5
+  - python-pptx>=1.0.2
+  - lxml
