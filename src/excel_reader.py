@@ -23,10 +23,20 @@ class Row:
     value: float
 
 
-def _normalize(text: object) -> str:
+def _display_text(text: object) -> str:
+    """Trim whitespace but preserve Unicode joiners (ZWJ U+200D) which are
+    essential for Sinhala conjunct glyphs like `න්‍ය` (yanshaya)."""
     if text is None:
         return ""
-    return str(text).replace("\u200d", "").strip()
+    return str(text).strip()
+
+
+def _compare_key(text: object) -> str:
+    """Aggressive normalization for label matching only. Strips zero-width
+    joiners and whitespace so label lookups tolerate small variations."""
+    if text is None:
+        return ""
+    return str(text).replace("\u200d", "").replace("\u200c", "").strip()
 
 
 def _parse_date_cell(value: object) -> date | None:
@@ -134,7 +144,7 @@ class ExcelReader:
 
         out: list[Row] = []
         for r in indices:
-            label = _normalize(ws[f"{label_col}{r}"].value)
+            label = _display_text(ws[f"{label_col}{r}"].value)
             value = ws[f"{value_col}{r}"].value
             if not label or _is_zero(value):
                 continue
@@ -149,9 +159,9 @@ class ExcelReader:
         """
         ws = self._sheet(SUMMARY_SHEET)
         col = self.column_for(SUMMARY_SHEET, target)
-        target_label = _normalize(LOAN_SURPLUS_LABEL)
+        target_label = _compare_key(LOAN_SURPLUS_LABEL)
         for row_idx in range(2, ws.max_row + 1):
-            if _normalize(ws.cell(row=row_idx, column=1).value) == target_label:
+            if _compare_key(ws.cell(row=row_idx, column=1).value) == target_label:
                 value = ws[f"{col}{row_idx}"].value
                 return float(value) if value is not None else 0.0
         raise ValueError(
