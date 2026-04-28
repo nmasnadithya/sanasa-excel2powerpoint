@@ -1,4 +1,4 @@
-"""Native PowerPoint pie chart with theme-coloured slices."""
+"""Native PowerPoint pie chart with theme-coloured slices and readable legend."""
 from __future__ import annotations
 
 from typing import Sequence
@@ -8,7 +8,7 @@ from pptx.dml.color import RGBColor
 from pptx.enum.chart import XL_CHART_TYPE, XL_LEGEND_POSITION, XL_LABEL_POSITION
 
 from src import theme
-from src.sinhala_font import apply_sinhala_font
+from src.sinhala_font import apply_sinhala_to_font
 
 
 def build_pie_chart(
@@ -29,37 +29,33 @@ def build_pie_chart(
     chart = graphic.chart
 
     chart.has_title = False
+
+    # Legend — readable size + black so it shows on the light theme.
     chart.has_legend = True
     chart.legend.position = XL_LEGEND_POSITION.RIGHT
     chart.legend.include_in_layout = False
-    _style_run(chart.legend.font)
+    legend_font = chart.legend.font
+    legend_font.size = theme.CHART_LEGEND_SIZE
+    legend_font.bold = False
+    legend_font.color.rgb = theme.BLACK
+    apply_sinhala_to_font(legend_font)
 
-    # Per-slice colors
+    # Per-slice fills + bold percentage data labels.
     plot = chart.plots[0]
     plot.has_data_labels = True
-    data_labels = plot.data_labels
-    data_labels.show_percentage = True
-    data_labels.show_category_name = False
-    data_labels.show_value = False
-    data_labels.position = XL_LABEL_POSITION.OUTSIDE_END
-    _style_run(data_labels.font, color=theme.BLACK)
+    dl = plot.data_labels
+    dl.show_percentage = True
+    dl.show_category_name = False
+    dl.show_value = False
+    dl.position = XL_LABEL_POSITION.OUTSIDE_END
+    dl.font.size = theme.CHART_DATA_LABEL_SIZE
+    dl.font.bold = True
+    dl.font.color.rgb = theme.BLACK
+    dl.number_format = "0.0%"
+    dl.number_format_is_linked = False
 
     series = plot.series[0]
     for idx, point in enumerate(series.points):
         fill = point.format.fill
         fill.solid()
         fill.fore_color.rgb = slice_colors[idx % len(slice_colors)]
-
-
-def _style_run(font, color=None) -> None:
-    """Style the chart legend / data label font with the Sinhala typeface.
-
-    Charts use a different XML branch from regular runs — `font.name` here
-    only sets the latin typeface, so we touch the underlying rPr to add a
-    `<a:cs>` element when present.
-    """
-    font.name = theme.LATIN_FONT
-    if color is not None:
-        font.color.rgb = color
-    # Charts don't expose run objects the same way; the latin name + theme
-    # font registration in the master is usually enough for legend text.

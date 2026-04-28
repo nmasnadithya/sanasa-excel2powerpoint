@@ -7,7 +7,7 @@ from pathlib import Path
 
 from src.excel_reader import ExcelReader
 from src.slide_specs import build_specs
-from src.builders.template_builder import TemplateBuilder, DEFAULT_TEMPLATE
+from src.builders.template_builder import TemplateBuilder, DEFAULT_SOURCE
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -28,8 +28,9 @@ def main() -> None:
     parser.add_argument("--date", type=_parse_date, default=None,
                         help="Target month-end date (YYYY-MM-DD). "
                              "Defaults to the latest date with non-empty data.")
-    parser.add_argument("--template", type=Path, default=DEFAULT_TEMPLATE,
-                        help="Path to templates/base.pptx")
+    parser.add_argument("--template", type=Path, default=DEFAULT_SOURCE,
+                        help="Source .pptx whose slide-1 layout (cover image), "
+                             "master, and theme are reused for the new deck")
     parser.add_argument("--output", type=Path, default=None,
                         help="Output .pptx path (default: output/<excel>_<date>.pptx)")
     args = parser.parse_args()
@@ -44,7 +45,7 @@ def main() -> None:
 
     specs = build_specs(reader, target)
     print(f"Generating {len(specs)} spec(s) for {target.isoformat()} → {args.output}")
-    builder = TemplateBuilder(template_path=args.template)
+    builder = TemplateBuilder(source_path=args.template)
     builder.build(specs, reader, target, args.output)
     print(f"✓ Wrote {args.output}")
 
