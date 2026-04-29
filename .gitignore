@@ -7,6 +7,8 @@ tests/__pycache__/
 .conda/
 output/
 output/_tmp/
+# Real financial data — not committed; CI uses tests/fixtures/sample.xlsx
+excel/
 .DS_Store
 ### JetBrains template
 # Covers JetBrains IDEs: IntelliJ, RubyMine, PhpStorm, AppCode, PyCharm, CLion, Android Studio, WebStorm and Rider

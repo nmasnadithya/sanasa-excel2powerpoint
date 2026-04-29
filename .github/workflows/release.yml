@@ -34,7 +34,7 @@ jobs:
         shell: pwsh
         run: |
           & ".\dist\sansa-excel2pptx.exe" `
-            --excel "excel\labalaba ginuma.xlsx" `
+            --excel "tests\fixtures\sample.xlsx" `
             --output "smoke.pptx"
           if (-not (Test-Path "smoke.pptx")) {
             Write-Error "smoke.pptx was not produced"
