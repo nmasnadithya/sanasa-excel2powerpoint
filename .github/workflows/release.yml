@@ -33,6 +33,8 @@ jobs:
       - name: Smoke test built exe
         shell: pwsh
         run: |
+          # Mirror the user-facing layout: template sits next to the .exe.
+          Copy-Item "labalaba ginuma.pptx" "dist\"
           & ".\dist\sansa-excel2pptx.exe" `
             --excel "tests\fixtures\sample.xlsx" `
             --output "smoke.pptx"
