@@ -23,6 +23,21 @@ class Row:
     value: float
 
 
+@dataclass(frozen=True)
+class MultiRow:
+    label: str
+    values: dict[date, float]
+    ytd_total: float
+
+
+# Income/expense detail rows that are category-summary aggregates rather than
+# line items. Used to filter top-N searches.
+INCOME_SUMMARY_ROWS = (2, 14, 20, 26, 31)
+EXPENSE_SUMMARY_ROWS = (2, 15, 44, 47, 53)
+INCOME_TOTAL_ROW = 31
+EXPENSE_TOTAL_ROW = 53
+
+
 def _display_text(text: object) -> str:
     """Trim whitespace but preserve Unicode joiners (ZWJ U+200D) which are
     essential for Sinhala conjunct glyphs like `න්‍ය` (yanshaya)."""
@@ -159,6 +174,9 @@ class ExcelReader:
         """
         ws = self._sheet(SUMMARY_SHEET)
         col = self.column_for(SUMMARY_SHEET, target)
+        return self._loan_surplus_at_col(ws, col)
+
+    def _loan_surplus_at_col(self, ws, col: str) -> float:
         target_label = _compare_key(LOAN_SURPLUS_LABEL)
         for row_idx in range(2, ws.max_row + 1):
             if _compare_key(ws.cell(row=row_idx, column=1).value) == target_label:
@@ -167,3 +185,148 @@ class ExcelReader:
         raise ValueError(
             f"Could not find row labelled {LOAN_SURPLUS_LABEL!r} in {SUMMARY_SHEET!r}"
         )
+
+    # --- v2 multi-month methods ----------------------------------------------
+
+    def populated_dates(self) -> list[date]:
+        """Date columns where either income or expense sheet has any non-zero
+        cell. Used as the X axis for trend charts."""
+        out: list[date] = []
+        for d, col in self.date_columns(INCOME_SHEET):
+            if self._has_data(INCOME_SHEET, col) or self._has_data(EXPENSE_SHEET, col):
+                out.append(d)
+        return sorted(out)
+
+    def rows_multi(
+        self,
+        sheet: str,
+        row_range: tuple[int, int] | tuple[int, ...],
+        label_col: str = "A",
+    ) -> list[MultiRow]:
+        """Per-row, per-month values + YTD total — drives trend visuals."""
+        ws = self._sheet(sheet)
+        if len(row_range) == 2 and isinstance(row_range[0], int) and row_range[0] < row_range[1]:
+            indices: list[int] = list(range(row_range[0], row_range[1] + 1))
+        else:
+            indices = list(row_range)
+
+        date_cols = self.date_columns(sheet)
+        ytd_col = self.ytd_column(sheet)
+        out: list[MultiRow] = []
+        for r in indices:
+            label = _display_text(ws[f"{label_col}{r}"].value)
+            if not label:
+                continue
+            values: dict[date, float] = {}
+            for d, col in date_cols:
+                v = ws[f"{col}{r}"].value
+                if not _is_zero(v):
+                    values[d] = float(v)
+            ytd_raw = ws[f"{ytd_col}{r}"].value if ytd_col else None
+            ytd_total = float(ytd_raw) if ytd_raw is not None else 0.0
+            # Skip rows that are entirely zero across all months AND have no YTD
+            if not values and _is_zero(ytd_total):
+                continue
+            out.append(MultiRow(label=label, values=values, ytd_total=ytd_total))
+        return out
+
+    def monthly_totals(self, sheet: str) -> dict[date, float]:
+        """Raw total row across all date columns — does NOT apply the surplus rule."""
+        ws = self._sheet(sheet)
+        if sheet == INCOME_SHEET:
+            row = INCOME_TOTAL_ROW
+        elif sheet == EXPENSE_SHEET:
+            row = EXPENSE_TOTAL_ROW
+        else:
+            raise ValueError(f"monthly_totals not defined for sheet {sheet!r}")
+        out: dict[date, float] = {}
+        for d, col in self.date_columns(sheet):
+            v = ws[f"{col}{row}"].value
+            if not _is_zero(v):
+                out[d] = float(v)
+        return out
+
+    def loan_surplus_per_month(self) -> dict[date, float]:
+        """Signed loan-surplus value per month (positive=expense, negative=income)."""
+        ws = self._sheet(SUMMARY_SHEET)
+        out: dict[date, float] = {}
+        for d, col in self.date_columns(SUMMARY_SHEET):
+            try:
+                v = self._loan_surplus_at_col(ws, col)
+            except ValueError:
+                continue
+            if v != 0:
+                out[d] = v
+        return out
+
+    def adjusted_monthly_totals(self, sheet: str) -> dict[date, float]:
+        """Surplus-aware totals.
+
+        Income gains the absolute value of negative surpluses;
+        expense gains positive surpluses. Reconciles to the summary
+        sheet's `ශුද්ධ ලාභය` row when subtracted.
+        """
+        if sheet not in (INCOME_SHEET, EXPENSE_SHEET):
+            raise ValueError(f"adjusted_monthly_totals: bad sheet {sheet!r}")
+        raw = self.monthly_totals(sheet)
+        surplus = self.loan_surplus_per_month()
+        out: dict[date, float] = {}
+        for d in self.populated_dates():
+            base = raw.get(d, 0.0)
+            s = surplus.get(d, 0.0)
+            if sheet == INCOME_SHEET:
+                out[d] = base + max(0.0, -s)   # negative s → income
+            else:
+                out[d] = base + max(0.0, s)    # positive s → expense
+        return out
+
+    def net_profit_per_month(self) -> dict[date, float]:
+        income = self.adjusted_monthly_totals(INCOME_SHEET)
+        expense = self.adjusted_monthly_totals(EXPENSE_SHEET)
+        return {d: income.get(d, 0.0) - expense.get(d, 0.0)
+                for d in self.populated_dates()}
+
+    def ytd_column(self, sheet: str) -> str | None:
+        """Return the column letter of the `මුළු එකතුව` total column, if any.
+
+        Income/expense sheets use a single total column right after the date
+        columns. Summary sheet has paired columns so we return the
+        first ('value') column of the total pair.
+        """
+        ws = self._sheet(sheet)
+        target_label = _compare_key("මුළු එකතුව")
+        for col_idx in range(2, ws.max_column + 1):
+            header = ws.cell(row=1, column=col_idx).value
+            if _compare_key(header) == target_label:
+                return get_column_letter(col_idx)
+        return None
+
+    def top_line_items(
+        self,
+        sheet: str,
+        target: date,
+        n: int = 5,
+        exclude_rows: tuple[int, ...] | None = None,
+    ) -> list[Row]:
+        """Top-N largest line items (by absolute value) for the target month.
+
+        Excludes rows listed in `exclude_rows` (typically the
+        category-summary aggregates and the grand-total row).
+        """
+        if exclude_rows is None:
+            exclude_rows = (INCOME_SUMMARY_ROWS if sheet == INCOME_SHEET
+                            else EXPENSE_SUMMARY_ROWS)
+        excludes = set(exclude_rows)
+        ws = self._sheet(sheet)
+        col = self.column_for(sheet, target)
+        items: list[Row] = []
+        for r in range(2, ws.max_row + 1):
+            if r in excludes:
+                continue
+            label = _display_text(ws[f"A{r}"].value)
+            v = ws[f"{col}{r}"].value
+            if not label or _is_zero(v):
+                continue
+            items.append(Row(label=label, value=float(v)))
+        items.sort(key=lambda x: abs(x.value), reverse=True)
+        return items[:n]

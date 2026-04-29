@@ -192,3 +192,158 @@ def _force_text_style(host_element, size_pt: float, bold: bool,
 
 def _hex(color: RGBColor) -> str:
     return str(color)
+
+
+# ===========================================================================
+# v2 chart helpers — bars, lines, stacked bars
+# ===========================================================================
+
+
+def build_bar_chart(
+    slide,
+    x, y, cx, cy,
+    categories: Sequence[str],
+    series_data: dict[str, Sequence[float]],
+    palette: Sequence[RGBColor],
+) -> None:
+    """Clustered (grouped) column chart. `series_data = {label: [values...]}`."""
+    _build_categorical(
+        slide, x, y, cx, cy,
+        chart_type=XL_CHART_TYPE.COLUMN_CLUSTERED,
+        categories=categories,
+        series_data=series_data,
+        palette=palette,
+        show_data_labels=True,
+    )
+
+
+def build_line_chart(
+    slide,
+    x, y, cx, cy,
+    categories: Sequence[str],
+    series_data: dict[str, Sequence[float]],
+    palette: Sequence[RGBColor],
+) -> None:
+    """Line chart, single or multi-series."""
+    _build_categorical(
+        slide, x, y, cx, cy,
+        chart_type=XL_CHART_TYPE.LINE_MARKERS,
+        categories=categories,
+        series_data=series_data,
+        palette=palette,
+        show_data_labels=True,
+        line_chart=True,
+    )
+
+
+def build_stacked_bar_chart(
+    slide,
+    x, y, cx, cy,
+    categories: Sequence[str],
+    series_data: dict[str, Sequence[float]],
+    palette: Sequence[RGBColor],
+) -> None:
+    """Stacked column chart — one stack per category, segments per series."""
+    _build_categorical(
+        slide, x, y, cx, cy,
+        chart_type=XL_CHART_TYPE.COLUMN_STACKED,
+        categories=categories,
+        series_data=series_data,
+        palette=palette,
+        show_data_labels=False,  # too crowded inside segments
+    )
+
+
+def _build_categorical(
+    slide, x, y, cx, cy,
+    chart_type,
+    categories: Sequence[str],
+    series_data: dict[str, Sequence[float]],
+    palette: Sequence[RGBColor],
+    show_data_labels: bool,
+    line_chart: bool = False,
+) -> None:
+    chart_data = CategoryChartData()
+    chart_data.categories = list(categories)
+    for name, values in series_data.items():
+        chart_data.add_series(name, list(values))
+
+    graphic = slide.shapes.add_chart(chart_type, x, y, cx, cy, chart_data)
+    chart = graphic.chart
+
+    chart.has_title = False
+    chart.has_legend = len(series_data) > 1
+    if chart.has_legend:
+        chart.legend.position = XL_LEGEND_POSITION.TOP
+        chart.legend.include_in_layout = False
+
+    # Per-series colors
+    plot = chart.plots[0]
+    for s_idx, series in enumerate(plot.series):
+        color = palette[s_idx % len(palette)]
+        if line_chart:
+            series.format.line.color.rgb = color
+            try:
+                series.format.line.width = theme.Pt(3)
+            except Exception:
+                pass
+        else:
+            series.format.fill.solid()
+            series.format.fill.fore_color.rgb = color
+
+    # Data labels (where useful)
+    if show_data_labels:
+        for series in plot.series:
+            series.data_labels.show_value = True
+            series.data_labels.number_format = '#,##0'
+            series.data_labels.number_format_is_linked = False
+
+    # XML patches — same recipe as build_pie_chart
+    chart_space = chart._chartSpace
+    _ensure_chart_style(chart_space, val=2)
+    if chart.has_legend:
+        legend = chart_space.find(f"{{{_C_NS}}}chart/{{{_C_NS}}}legend")
+        if legend is not None:
+            legend_pos = legend.find(f"{{{_C_NS}}}legendPos")
+            if legend_pos is not None:
+                legend_pos.set("val", "t")
+            _force_text_style(
+                legend,
+                size_pt=theme.CHART_LEGEND_SIZE.pt,
+                bold=True,
+                color_hex=_hex(theme.BLACK),
+                sinhala=True,
+            )
+
+    # Axes — bump tick label font; without this matplotlib-style charts come
+    # out tiny on a 13" projection.
+    _force_axis_text_style(chart_space, theme.CHART_LEGEND_SIZE.pt)
+
+    # Data labels styling
+    plot_area = chart_space.find(f"{{{_C_NS}}}chart/{{{_C_NS}}}plotArea")
+    if plot_area is not None:
+        for d_lbls in plot_area.iter(f"{{{_C_NS}}}dLbls"):
+            _force_text_style(
+                d_lbls,
+                size_pt=theme.CHART_DATA_LABEL_SIZE.pt * 0.6,  # ~22pt for bars/lines
+                bold=True,
+                color_hex=_hex(theme.BLACK),
+                sinhala=False,
+            )
+
+
+def _force_axis_text_style(chart_space, size_pt: float) -> None:
+    """Bump the font size on all <c:catAx>/<c:valAx> tick labels."""
+    plot_area = chart_space.find(f"{{{_C_NS}}}chart/{{{_C_NS}}}plotArea")
+    if plot_area is None:
+        return
+    for ax in list(plot_area.iter(f"{{{_C_NS}}}catAx")) + list(
+        plot_area.iter(f"{{{_C_NS}}}valAx")
+    ):
+        _force_text_style(
+            ax,
+            size_pt=size_pt,
+            bold=False,
+            color_hex=_hex(theme.BLACK),
+            sinhala=True,
+        )

@@ -98,3 +98,22 @@ LEGEND_LAYOUT_X = 0.50
 LEGEND_LAYOUT_Y = 0.05
 LEGEND_LAYOUT_W = 0.48
 LEGEND_LAYOUT_H = 0.90
+
+# v2 trends ------------------------------------------------------------------
+BAR_PALETTE = PIE_PALETTE                       # same colors for bars & lines
+STACKED_PALETTE = PIE_PALETTE
+LINE_INCOME_COLOR = RGBColor(0x00, 0x68, 0x38)  # dark green
+LINE_EXPENSE_COLOR = RGBColor(0x9B, 0x1B, 0x30) # dark crimson
+LINE_PROFIT_COLOR = RGBColor(0x00, 0x5F, 0x73)  # deep teal
+
+DELTA_POSITIVE_COLOR = RGBColor(0x00, 0x68, 0x38)   # green for "improved"
+DELTA_NEGATIVE_COLOR = RGBColor(0xC0, 0x00, 0x00)   # red for "worsened"
+
+# Image-chart placement (mirrors CHART_* so PNGs sit in the same area) -------
+IMAGE_LEFT = CHART_LEFT
+IMAGE_TOP = CHART_TOP
+IMAGE_WIDTH = CHART_WIDTH
+IMAGE_HEIGHT = CHART_HEIGHT
+
+# Matplotlib font fallback chain --------------------------------------------
+MATPLOTLIB_FONT_FAMILY = ["UN-Ganganee", "Sinhala MN", "Iskoola Pota", "DejaVu Sans"]
