@@ -2,6 +2,22 @@
 
 Generates a Sinhala monthly financial PowerPoint deck from `excel/labalaba ginuma.xlsx`.
 
+## Download for Windows
+
+Pre-built `.exe` releases are published via GitHub Actions on tag pushes
+(`v*`). Grab the latest from the [Releases page](../../releases).
+
+The downloaded zip contains:
+
+```
+sansa-excel2pptx.exe
+labalaba ginuma.pptx          # default template — swap with your own
+README.txt
+```
+
+Drop your monthly `.xlsx` next to the `.exe` and double-click. See the
+included `README.txt` for full usage.
+
 ## Setup (one-time)
 
 ```bash
@@ -68,6 +84,11 @@ output/                    # generated decks (gitignored)
 
 - Hybrid / from-scratch builders selectable via `--builder` flag
 - Additional chart types
-- PyInstaller Windows packaging
 - Visual regression testing via image diffs against a known-good run
 - Cleaner orphan-part removal (the 17-slide strip leaves chart parts in the package, bloating the file to ~13 MB)
+
+## Dependency files
+
+`environment.yml` (conda) and `requirements.txt` (pip) are kept in sync
+manually. Local development uses conda; CI uses pip because PyInstaller
+plays poorly with conda environments inside GitHub Actions runners.

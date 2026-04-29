@@ -145,6 +145,7 @@ MANIFEST
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
+!sansa-excel2pptx.spec
 
 # Installer logs
 pip-log.txt
