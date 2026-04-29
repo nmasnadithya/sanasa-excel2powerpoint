@@ -97,7 +97,15 @@ def main() -> None:
     args = _build_parser().parse_args()
     excel = _resolve_excel(args.excel)
     template = _resolve_template(args.template)
-    run_pipeline(excel, args.date, template, args.output, cli_mode=True)
+    try:
+        run_pipeline(excel, args.date, template, args.output, cli_mode=True)
+    except Exception:
+        # In --windowed PyInstaller builds, Python's default exception display
+        # routes to a Tk dialog that can't render in headless CI. Force the
+        # traceback to stderr so failures are visible in logs.
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
 
 
 if __name__ == "__main__":
