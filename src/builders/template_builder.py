@@ -30,15 +30,20 @@ from src.slide_specs import (
 from src.chart_writer import (
     build_pie_chart, build_bar_chart, build_line_chart, build_stacked_bar_chart,
 )
+from src.runtime_paths import app_dir, default_template_path
 
 
 MAX_ROWS_PER_TABLE_SLIDE = 9
 CONTINUATION_SUFFIX = " (අඛණ්ඩව)"
 
-DEFAULT_SOURCE = (
-    Path(__file__).resolve().parents[2] / "labalaba ginuma.pptx"
-)
-TMP_DIR = Path(__file__).resolve().parents[2] / "output" / "_tmp"
+
+def _default_source() -> Path:
+    return default_template_path()
+
+
+# Backwards-compatible name kept for callers; resolved lazily.
+DEFAULT_SOURCE = _default_source()
+TMP_DIR = app_dir() / "output" / "_tmp"
 
 _P_NS = "http://schemas.openxmlformats.org/presentationml/2006/main"
 _A_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
